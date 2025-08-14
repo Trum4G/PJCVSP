@@ -1,0 +1,158 @@
+# Cấu hình chính cho Windows VPS
+# Configuration file for Windows VPS system
+
+# Thông tin VPS
+vps:
+  name: "TASTR-VPS"
+  description: "TASTR Windows VPS cho học tập và AI development"
+  version: "2.0.0"
+  timeout_minutes: 360  # 6 tiếng
+  auto_restart: false   # Đã tắt auto-restart
+  
+  # Thông số kỹ thuật VPS (GitHub Actions Windows thực tế)
+  specs:
+    cpu_cores: 4      # 4 cores cho Windows runner
+    ram_gb: 16        # 16GB RAM available cho Windows
+    storage_gb: 200   # 200GB+ Storage available
+    gpu_support: false # Không có GPU (GitHub Actions limitation)
+    network_speed: "1 Gbps"
+
+# Cấu hình Windows user
+windows_user:
+  username: "TASTR"     # Fixed username TASTR
+  auto_generate_password: false  # Sử dụng password từ input
+  password_required: true        # Password bắt buộc
+  min_password_length: 8         # Tối thiểu 8 ký tự
+  enable_rdp: true
+  hide_runneradmin: true         # Ẩn user runneradmin
+
+# Cấu hình Remote Access
+remote_access:
+  # Tmate configuration
+  tmate_server: "nyc1.tmate.io"
+  tmate_enabled: false  # Tắt tmate
+  
+  # Ngrok configuration (bắt buộc)
+  ngrok_enabled: true
+  ngrok_required: true    # Ngrok token bắt buộc
+  ngrok_region: "us"      # us, eu, ap, au, sa, jp, in
+  
+  # Playit configuration (đã tắt)
+  playit_enabled: false
+  playit_auto_setup: false
+
+# Cấu hình Backup
+backup:
+  enabled: true
+  compression_level: 6
+  retention_days: 30
+  max_local_backups: 5
+  
+  # Backup methods (theo thứ tự ưu tiên)
+  methods:
+    - github_releases  # Primary method
+    - transfer_sh      # Fallback method
+    - local_storage    # Local backup
+  
+  # Paths to backup
+  include_paths:
+    - "TASTRVPS/"
+    - "logs/"
+    - "templates/"
+    - "docs/"
+  
+  # Paths to exclude
+  exclude_patterns:
+    - "*.tmp"
+    - "*.log"
+    - "node_modules/"
+    - ".git/"
+
+# Cấu hình Monitoring
+monitoring:
+  enabled: true
+  check_interval_seconds: 60
+  health_checks:
+    - rdp_service
+    - memory_usage
+    - disk_space
+    - network_connectivity
+  
+  # Thresholds
+  thresholds:
+    memory_warning_gb: 1.0
+    disk_warning_gb: 2.0
+    cpu_warning_percent: 80
+
+# Cấu hình Logging
+logging:
+  enabled: true
+  level: "INFO"  # DEBUG, INFO, WARNING, ERROR
+  max_file_size_mb: 10
+  max_files: 5
+  log_directory: "logs/"
+  
+  # Log files
+  files:
+    main: "vps-main.log"
+    monitoring: "vps-monitoring.log"
+    backup: "vps-backup.log"
+    error: "vps-error.log"
+
+# Cấu hình Security
+security:
+  input_validation: true
+  session_timeout: true
+  auto_cleanup: true
+  
+  # Password policy
+  password_policy:
+    min_length: 8
+    require_uppercase: true
+    require_lowercase: true
+    require_numbers: true
+    require_special_chars: false
+
+# Cấu hình GitHub Actions
+github_actions:
+  workflow_name: "Create Windows VPS (Auto Restart)"
+  runner: "windows-latest"
+  
+  # Environment variables
+  env_vars:
+    ACTIONS_RUNNER_DEBUG: false
+    ACTIONS_STEP_DEBUG: false
+  
+  # Secrets required
+  required_secrets:
+    - GITHUB_TOKEN  # Always required
+    # Optional secrets:
+    # - NGROK_TOKEN
+    # - CUSTOM_PASSWORD
+
+# Cấu hình Testing
+testing:
+  enabled: true
+  auto_run: false
+  test_timeout_minutes: 10
+  
+  # Test suites
+  suites:
+    - syntax_validation
+    - configuration_validation
+    - backup_functionality
+    - monitoring_checks
+
+# Thông tin Project
+project:
+  name: "Windows VPS Study System"
+  author: "GitHub Actions"
+  license: "MIT"
+  repository: "https://github.com/your-username/windows-vps"
+  documentation: "docs/"
+  
+  # Support
+  support:
+    issues_url: "https://github.com/your-username/windows-vps/issues"
+    wiki_url: "https://github.com/your-username/windows-vps/wiki"
+    email: "support@example.com"

@@ -1,0 +1,361 @@
+name: Create Windows VPS
+
+on:
+  workflow_dispatch:
+    inputs:
+      vps_name:
+        description: 'Tên VPS (ví dụ: TASTR-Study)'
+        required: false
+        default: 'TASTR-VPS'
+        type: string
+
+      backup:
+        description: 'Khôi phục từ backup trước đó?'
+        required: false
+        default: false
+        type: boolean
+      timeout_minutes:
+        description: 'Thời gian chạy VPS (phút, tối đa 360 = 6 tiếng)'
+        required: true
+        default: 360
+        type: number
+      windows_password:
+        description: 'Mật khẩu Windows tùy chỉnh (ít nhất 8 ký tự, bắt buộc)'
+        required: true
+        type: string
+      ngrok_token:
+        description: 'Ngrok token (bắt buộc để kết nối ổn định)'
+        required: true
+        type: string
+
+jobs:
+  create-vps:
+    runs-on: windows-latest
+    timeout-minutes: ${{ fromJSON(inputs.timeout_minutes || '360') }}
+    
+    steps:
+    # Step 1: Validate inputs
+    - name: 🔍 Validate Inputs
+      shell: powershell
+      run: |
+        Write-Host "=== Kiểm tra đầu vào ===" -ForegroundColor Green
+        
+        $vpsName = "${{ inputs.vps_name || 'StudyVPS' }}"
+        $timeout = [int]"${{ inputs.timeout_minutes || '360' }}"
+        
+        # Validate VPS name
+        if ($vpsName -match '[^a-zA-Z0-9\-_]') {
+          Write-Error "Tên VPS chỉ được chứa chữ cái, số, dấu gạch ngang và gạch dưới"
+          exit 1
+        }
+        
+        # Validate timeout
+        if ($timeout -lt 30 -or $timeout -gt 360) {
+          Write-Error "Thời gian chạy phải từ 30-360 phút (tối đa 6 tiếng)"
+          exit 1
+        }
+        
+        # Validate password (now required)
+        $customPassword = "${{ inputs.windows_password }}"
+        if (-not $customPassword -or $customPassword.Length -lt 8) {
+          Write-Error "Mật khẩu là bắt buộc và phải có ít nhất 8 ký tự"
+          exit 1
+        }
+        
+        # Validate ngrok token (now required)
+        $ngrokToken = "${{ inputs.ngrok_token }}"
+        if (-not $ngrokToken -or $ngrokToken.Length -lt 10) {
+          Write-Error "Ngrok token là bắt buộc và phải hợp lệ"
+          exit 1
+        }
+        
+        Write-Host "✅ Tất cả đầu vào hợp lệ" -ForegroundColor Green
+        Write-Host "📝 VPS Name: $vpsName" -ForegroundColor Cyan
+        Write-Host "🖥️ Runner: GitHub Windows (16GB RAM, 200GB SSD, 4 cores)" -ForegroundColor Cyan
+        Write-Host "⏱️ Timeout: $timeout phút" -ForegroundColor Cyan
+        Write-Host "🔄 Backup: ${{ inputs.backup }}" -ForegroundColor Cyan
+
+    # Step 2: Checkout và chuẩn bị
+    - name: 📥 Checkout Repository
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: 📁 Prepare Directories
+      shell: powershell
+      run: |
+        Write-Host "=== Chuẩn bị thư mục ===" -ForegroundColor Green
+        
+        # Create necessary directories
+        $dirs = @("TASTRVPS", "logs", "templates", "TASTRVPS\scripts")
+        foreach ($dir in $dirs) {
+          if (!(Test-Path $dir)) {
+            New-Item -ItemType Directory -Path $dir -Force
+            Write-Host "✅ Tạo thư mục: $dir" -ForegroundColor Green
+          }
+        }
+        
+        # Set environment variables
+        echo "VPS_NAME=${{ inputs.vps_name || 'TASTR-VPS' }}" >> $env:GITHUB_ENV
+        echo "BACKUP_ENABLED=${{ inputs.backup }}" >> $env:GITHUB_ENV
+        echo "TIMEOUT_MINUTES=${{ inputs.timeout_minutes || '360' }}" >> $env:GITHUB_ENV
+        echo "WINDOWS_PASSWORD=${{ inputs.windows_password }}" >> $env:GITHUB_ENV
+        echo "NGROK_TOKEN=${{ inputs.ngrok_token }}" >> $env:GITHUB_ENV
+
+    # Step 2.5: Display System Information
+    - name: 📊 Display System Information
+      shell: powershell
+      run: |
+        Write-Host "=== Thông số hệ thống ===" -ForegroundColor Green
+        
+        # Get system info
+        $computerInfo = Get-ComputerInfo
+        $cpu = Get-WmiObject -Class Win32_Processor | Select-Object -First 1
+        $memory = Get-WmiObject -Class Win32_PhysicalMemory | Measure-Object -Property Capacity -Sum
+        $disk = Get-WmiObject -Class Win32_LogicalDisk -Filter "DeviceID='C:'" | Select-Object Size, FreeSpace
+        
+        # Display info
+        Write-Host "💻 Computer: $($computerInfo.CsName)" -ForegroundColor Cyan
+        Write-Host "🖥️ OS: $($computerInfo.WindowsProductName)" -ForegroundColor Cyan
+        Write-Host "🔧 CPU: $($cpu.Name)" -ForegroundColor Cyan
+        Write-Host "⚡ CPU Cores: $($cpu.NumberOfCores)" -ForegroundColor Cyan
+        Write-Host "🧠 RAM Total: $([math]::Round($memory.Sum / 1GB, 2)) GB" -ForegroundColor Cyan
+        Write-Host "💾 Disk Total: $([math]::Round($disk.Size / 1GB, 2)) GB" -ForegroundColor Cyan
+        Write-Host "💽 Disk Free: $([math]::Round($disk.FreeSpace / 1GB, 2)) GB" -ForegroundColor Cyan
+        
+        # Check GPU
+        try {
+          $gpu = Get-WmiObject -Class Win32_VideoController | Where-Object { $_.Name -notlike "*Basic*" -and $_.Name -notlike "*Generic*" } | Select-Object -First 1
+          if ($gpu) {
+            Write-Host "🎮 GPU: $($gpu.Name)" -ForegroundColor Cyan
+            if ($gpu.AdapterRAM -gt 0) {
+              Write-Host "🎯 VRAM: $([math]::Round($gpu.AdapterRAM / 1GB, 2)) GB" -ForegroundColor Cyan
+            }
+          } else {
+            Write-Host "🎮 GPU: Not detected" -ForegroundColor Yellow
+          }
+        } catch {
+          Write-Host "🎮 GPU: Detection failed" -ForegroundColor Yellow
+        }
+        
+        # Runner info
+        Write-Host "☁️ Runner: GitHub Windows (Miễn phí)" -ForegroundColor Blue
+        Write-Host "⏰ Time Limit: ${{ inputs.timeout_minutes }} minutes" -ForegroundColor Blue
+
+    # Step 3: Restore backup (optional)
+    - name: 📦 Restore Backup (Optional)
+      if: inputs.backup == true
+      shell: powershell
+      run: |
+        Write-Host "=== Khôi phục Backup ===" -ForegroundColor Green
+        
+        if (Test-Path "TASTRVPS\backupre-store.sh") {
+          Write-Host "🔄 Chạy script khôi phục backup..." -ForegroundColor Yellow
+          bash TASTRVPS\backupre-store.sh restore
+        } else {
+          Write-Host "⚠️ Không tìm thấy script backup, bỏ qua bước này" -ForegroundColor Yellow
+        }
+
+    # Step 4: Load configuration
+    - name: ⚙️ Load Configuration
+      shell: powershell
+      run: |
+        Write-Host "=== Tải cấu hình ===" -ForegroundColor Green
+        
+        # Install PowerShell-Yaml if not exists
+        if (!(Get-Module -ListAvailable -Name powershell-yaml)) {
+          Write-Host "📦 Cài đặt PowerShell-Yaml..." -ForegroundColor Yellow
+          Install-Module -Name powershell-yaml -Force -Scope CurrentUser
+        }
+        
+        # Load config if exists
+        if (Test-Path "TASTRVPS\config.yml") {
+          Write-Host "📝 Tải cấu hình từ config.yml..." -ForegroundColor Cyan
+          $config = Get-Content "TASTRVPS\config.yml" | ConvertFrom-Yaml
+          
+          # Set environment variables from config
+          # Always use TASTR as the username
+          echo "WINDOWS_USER=TASTR" >> $env:GITHUB_ENV
+          
+          if ($config.tmate_server) {
+            echo "TMATE_SERVER=$($config.tmate_server)" >> $env:GITHUB_ENV
+          } else {
+            echo "TMATE_SERVER=nyc1.tmate.io" >> $env:GITHUB_ENV
+          }
+        } else {
+          Write-Host "⚠️ Không tìm thấy config.yml, sử dụng cấu hình mặc định" -ForegroundColor Yellow
+          echo "WINDOWS_USER=TASTR" >> $env:GITHUB_ENV
+          echo "TMATE_SERVER=nyc1.tmate.io" >> $env:GITHUB_ENV
+        }
+
+    # Step 5: Setup Windows RDP
+    - name: 🖥️ Setup Windows RDP
+      shell: powershell
+      run: |
+        Write-Host "=== Cài đặt Windows RDP ===" -ForegroundColor Green
+        
+        # Enable RDP
+        Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -name "fDenyTSConnections" -value 0
+        Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
+        Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -name "UserAuthentication" -value 1
+        
+        # Use provided password
+        $password = $env:WINDOWS_PASSWORD
+        Write-Host "🔐 Sử dụng mật khẩu được cung cấp" -ForegroundColor Cyan
+        
+        # Hide runneradmin user
+        Write-Host "👤 Ẩn user runneradmin..." -ForegroundColor Yellow
+        net user runneradmin /active:no 2>$null || Write-Host "User runneradmin không tồn tại hoặc đã bị ẩn" -ForegroundColor Gray
+        
+        # Create TASTR user with full privileges
+        $username = "TASTR"
+        Write-Host "👤 Tạo user TASTR với full quyền..." -ForegroundColor Cyan
+        
+        # Create new user TASTR
+        net user $username $password /add
+        net localgroup administrators $username /add
+        net localgroup "Remote Desktop Users" $username /add
+        
+        # Give additional privileges
+        net localgroup "Power Users" $username /add 2>$null || Write-Host "Power Users group không tồn tại" -ForegroundColor Gray
+        net localgroup "Users" $username /add 2>$null || Write-Host "Users group đã có user" -ForegroundColor Gray
+        
+        Write-Host "✅ RDP đã được cấu hình" -ForegroundColor Green
+        Write-Host "👤 Username: $username" -ForegroundColor Cyan
+        Write-Host "🔑 Password: [HIDDEN]" -ForegroundColor Cyan
+        
+        # Save credentials to environment
+        echo "RDP_USERNAME=$username" >> $env:GITHUB_ENV
+        echo "RDP_PASSWORD=$password" >> $env:GITHUB_ENV
+
+    # Step 6: Setup Ngrok tunnel với fallback Playit
+    - name: 🌐 Setup Remote Access Tunnel
+      shell: powershell
+      run: |
+        Write-Host "=== Cài đặt Remote Access ===" -ForegroundColor Green
+        
+        # Use ngrok token from input (now required)
+        $ngrokToken = $env:NGROK_TOKEN
+        
+        Write-Host "🚀 Cài đặt Ngrok tunnel..." -ForegroundColor Cyan
+        
+        # Download và cài đặt Ngrok
+        Invoke-WebRequest -Uri "https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-v3-stable-windows-amd64.zip" -OutFile "ngrok.zip"
+        Expand-Archive -Path "ngrok.zip" -DestinationPath "." -Force
+        
+        # Cấu hình Ngrok
+        .\ngrok.exe config add-authtoken $ngrokToken
+        
+        # Khởi động Ngrok tunnel cho RDP
+        Start-Process -FilePath ".\ngrok.exe" -ArgumentList "tcp", "3389", "--log=stdout" -NoNewWindow -PassThru
+        
+        Start-Sleep -Seconds 10
+        
+        # Lấy thông tin tunnel
+        try {
+          $tunnelInfo = Invoke-RestMethod -Uri "http://localhost:4040/api/tunnels"
+          $publicUrl = $tunnelInfo.tunnels[0].public_url
+          Write-Host "🌐 Ngrok URL: $publicUrl" -ForegroundColor Green
+          echo "TUNNEL_URL=$publicUrl" >> $env:GITHUB_ENV
+          echo "TUNNEL_TYPE=ngrok" >> $env:GITHUB_ENV
+        } catch {
+          Write-Host "⚠️ Không thể lấy thông tin Ngrok tunnel" -ForegroundColor Yellow
+          Write-Host "💡 Hãy kiểm tra Ngrok dashboard để lấy URL kết nối" -ForegroundColor Cyan
+        }
+
+    # Step 7: Create optimized backup
+    - name: 💾 Create Backup
+      shell: powershell
+      run: |
+        Write-Host "=== Tạo Backup ===" -ForegroundColor Green
+        
+        if (Test-Path "TASTRVPS\backupre-store.sh") {
+          Write-Host "📦 Chạy script tạo backup..." -ForegroundColor Yellow
+          bash TASTRVPS\backupre-store.sh backup
+        } else {
+          Write-Host "⚠️ Không tìm thấy script backup" -ForegroundColor Yellow
+          
+          # Simple backup
+          $backupDir = "backup-$(Get-Date -Format 'yyyyMMdd-HHmmss')"
+          New-Item -ItemType Directory -Path $backupDir -Force
+          
+          # Backup important files
+          if (Test-Path "TASTRVPS") { Copy-Item -Path "TASTRVPS" -Destination "$backupDir\" -Recurse -Force }
+          if (Test-Path "logs") { Copy-Item -Path "logs" -Destination "$backupDir\" -Recurse -Force }
+          
+          Write-Host "✅ Backup cơ bản đã hoàn thành: $backupDir" -ForegroundColor Green
+        }
+
+    # Step 8: Auto-commit updates
+    - name: 📝 Auto-commit Updates
+      shell: powershell
+      run: |
+        Write-Host "=== Cập nhật Repository ===" -ForegroundColor Green
+        
+        git config --global user.name "VPS Auto Update"
+        git config --global user.email "vps@github.actions"
+        
+        # Add changes
+        git add -A
+        
+        # Check if there are changes to commit
+        $changes = git status --porcelain
+        if ($changes) {
+          $commitMessage = "🤖 Auto-update VPS session $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
+          git commit -m $commitMessage
+          
+          # Try to push (may fail if no permissions)
+          try {
+            git push
+            Write-Host "✅ Đã cập nhật repository" -ForegroundColor Green
+          } catch {
+            Write-Host "⚠️ Không thể push changes (có thể do quyền hạn)" -ForegroundColor Yellow
+          }
+        } else {
+          Write-Host "📝 Không có thay đổi để commit" -ForegroundColor Cyan
+        }
+
+    # Step 9: Keep-alive monitoring với health checks
+    - name: 🔄 Keep-alive Monitoring
+      shell: powershell
+      run: |
+        Write-Host "=== Bắt đầu Keep-alive Monitoring ===" -ForegroundColor Green
+        
+        $timeout = [int]$env:TIMEOUT_MINUTES
+        $endTime = (Get-Date).AddMinutes($timeout)
+        $checkInterval = 60 # Check every minute
+        
+        Write-Host "⏰ VPS sẽ chạy đến: $($endTime.ToString('yyyy-MM-dd HH:mm:ss'))" -ForegroundColor Cyan
+        Write-Host "🌐 Thông tin kết nối:" -ForegroundColor Green
+        Write-Host "   Username: $env:RDP_USERNAME" -ForegroundColor Yellow
+        Write-Host "   Password: $env:RDP_PASSWORD" -ForegroundColor Yellow
+        Write-Host "   Tunnel Type: $env:TUNNEL_TYPE" -ForegroundColor Yellow
+        if ($env:TUNNEL_URL) {
+          Write-Host "   Tunnel URL: $env:TUNNEL_URL" -ForegroundColor Yellow
+        }
+        
+        Write-Host "`n🎯 VPS đã sẵn sàng sử dụng!" -ForegroundColor Green
+        Write-Host "📚 Sử dụng thông tin trên để kết nối RDP và bắt đầu học tập!" -ForegroundColor Cyan
+        Write-Host "⏱️ Thời gian còn lại: $timeout phút" -ForegroundColor Yellow
+        Write-Host "🖥️ Thông số VPS: 16GB RAM, 200GB+ Storage, 4 cores" -ForegroundColor Cyan
+        
+        while ((Get-Date) -lt $endTime) {
+          $remaining = [math]::Round(($endTime - (Get-Date)).TotalMinutes, 1)
+          
+          # Health checks
+          $rdpStatus = Get-Service -Name "TermService" -ErrorAction SilentlyContinue
+          $memoryUsage = [math]::Round((Get-WmiObject -Class Win32_OperatingSystem).TotalVisibleMemorySize / 1MB, 2)
+          $freeSpace = [math]::Round((Get-WmiObject -Class Win32_LogicalDisk -Filter "DeviceID='C:'").FreeSpace / 1GB, 2)
+          
+          Write-Host "💓 Health Check - Còn lại: $remaining phút | RDP: $($rdpStatus.Status) | RAM: $memoryUsage GB | Disk: $freeSpace GB free" -ForegroundColor Cyan
+          
+          # Log to file
+          $logEntry = "$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') - Remaining: $remaining min, RDP: $($rdpStatus.Status), RAM: $memoryUsage GB, Disk: $freeSpace GB"
+          Add-Content -Path "logs\vps-monitoring.log" -Value $logEntry
+          
+          Start-Sleep -Seconds $checkInterval
+        }
+        
+        Write-Host "⏰ Thời gian chạy VPS đã hết!" -ForegroundColor Yellow
+        Write-Host "🎓 Cảm ơn bạn đã sử dụng TASTR Windows VPS!" -ForegroundColor Green
+        Write-Host "💡 Bạn có thể chạy lại workflow để tạo VPS mới" -ForegroundColor Cyan
