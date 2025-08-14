@@ -36,7 +36,7 @@ on:
 jobs:
   setup-windows-vm:
     runs-on: ${{ github.event.inputs.vm_type }}
-    timeout-minutes: ${{ github.event.inputs.run_time_minutes || 360 }}
+    timeout-minutes: 360
     
     steps:
     - name: Checkout code
@@ -53,7 +53,9 @@ jobs:
         echo "=== Thông tin ổ cứng ==="
         wmic logicaldisk get size,freespace,caption
         echo "=== Thời gian chạy ==="
-        echo "Thời gian chạy: ${{ github.event.inputs.run_time_minutes }} phút"
+        echo "Thời gian chạy được yêu cầu: ${{ github.event.inputs.run_time_minutes }} phút"
+        echo "Thời gian timeout tối đa: 360 phút (6 giờ)"
+        echo "Lưu ý: Máy ảo sẽ tự động hủy sau khi workflow kết thúc"
         
     - name: Cài đặt Chocolatey (Package Manager)
       if: ${{ github.event.inputs.setup_tools }}
