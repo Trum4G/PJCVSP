@@ -20,7 +20,7 @@ on:
         default: 360
         type: number
       windows_password:
-        description: 'Custom Windows password (8-14 characters, required)'
+        description: 'Custom Windows password (8-14 chars, must contain A-Z, a-z, 0-9)'
         required: true
         type: string
       ngrok_token:
@@ -63,6 +63,11 @@ jobs:
         }
         if ($customPassword.Length -gt 14) {
           Write-Error "Password must be 14 characters or less for Windows compatibility"
+          exit 1
+        }
+        # Check password complexity
+        if (-not ($customPassword -match '[A-Z]') -or -not ($customPassword -match '[a-z]') -or -not ($customPassword -match '[0-9]')) {
+          Write-Error "Password must contain uppercase, lowercase, and numbers"
           exit 1
         }
         
