@@ -20,7 +20,7 @@ on:
         default: 360
         type: number
       windows_password:
-        description: 'Custom Windows password (min 8 characters, required)'
+        description: 'Custom Windows password (8-14 characters, required)'
         required: true
         type: string
       ngrok_token:
@@ -59,6 +59,10 @@ jobs:
         $customPassword = "${{ inputs.windows_password }}"
         if (-not $customPassword -or $customPassword.Length -lt 8) {
           Write-Error "Password is required and must be at least 8 characters"
+          exit 1
+        }
+        if ($customPassword.Length -gt 14) {
+          Write-Error "Password must be 14 characters or less for Windows compatibility"
           exit 1
         }
         
@@ -211,10 +215,10 @@ jobs:
         $username = "TASTR"
         Write-Host "Creating TASTR user with full privileges..." -ForegroundColor Cyan
         
-        # Create new user TASTR
-        net user $username $password /add
-        net localgroup administrators $username /add
-        net localgroup "Remote Desktop Users" $username /add
+                 # Create new user TASTR
+         net user $username $password /add /y
+         net localgroup administrators $username /add
+         net localgroup "Remote Desktop Users" $username /add
         
         # Give additional privileges
         try { net localgroup "Power Users" $username /add 2>$null } catch { Write-Host "Power Users group does not exist" -ForegroundColor Gray }
