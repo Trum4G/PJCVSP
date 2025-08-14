@@ -201,28 +201,28 @@ jobs:
         
         # Use provided password
         $password = $env:WINDOWS_PASSWORD
-        Write-Host "🔐 Sử dụng mật khẩu được cung cấp" -ForegroundColor Cyan
-        
-        # Hide runneradmin user
-        Write-Host "👤 Ẩn user runneradmin..." -ForegroundColor Yellow
-        net user runneradmin /active:no 2>$null || Write-Host "User runneradmin không tồn tại hoặc đã bị ẩn" -ForegroundColor Gray
-        
-        # Create TASTR user with full privileges
-        $username = "TASTR"
-        Write-Host "👤 Tạo user TASTR với full quyền..." -ForegroundColor Cyan
+                 Write-Host "Sử dụng mật khẩu được cung cấp" -ForegroundColor Cyan
+         
+         # Hide runneradmin user
+         Write-Host "Ẩn user runneradmin..." -ForegroundColor Yellow
+         try { net user runneradmin /active:no 2>$null } catch { Write-Host "User runneradmin không tồn tại hoặc đã bị ẩn" -ForegroundColor Gray }
+         
+         # Create TASTR user with full privileges
+         $username = "TASTR"
+         Write-Host "Tạo user TASTR với full quyền..." -ForegroundColor Cyan
         
         # Create new user TASTR
         net user $username $password /add
         net localgroup administrators $username /add
         net localgroup "Remote Desktop Users" $username /add
         
-        # Give additional privileges
-        net localgroup "Power Users" $username /add 2>$null || Write-Host "Power Users group không tồn tại" -ForegroundColor Gray
-        net localgroup "Users" $username /add 2>$null || Write-Host "Users group đã có user" -ForegroundColor Gray
+                 # Give additional privileges
+         try { net localgroup "Power Users" $username /add 2>$null } catch { Write-Host "Power Users group không tồn tại" -ForegroundColor Gray }
+         try { net localgroup "Users" $username /add 2>$null } catch { Write-Host "Users group đã có user" -ForegroundColor Gray }
         
-        Write-Host "✅ RDP đã được cấu hình" -ForegroundColor Green
-        Write-Host "👤 Username: $username" -ForegroundColor Cyan
-        Write-Host "🔑 Password: [HIDDEN]" -ForegroundColor Cyan
+                 Write-Host "RDP đã được cấu hình" -ForegroundColor Green
+         Write-Host "Username: $username" -ForegroundColor Cyan
+         Write-Host "Password: [HIDDEN]" -ForegroundColor Cyan
         
         # Save credentials to environment
         echo "RDP_USERNAME=$username" >> $env:GITHUB_ENV
@@ -237,7 +237,7 @@ jobs:
         # Use ngrok token from input (now required)
         $ngrokToken = $env:NGROK_TOKEN
         
-        Write-Host "🚀 Cài đặt Ngrok tunnel..." -ForegroundColor Cyan
+                 Write-Host "Cài đặt Ngrok tunnel..." -ForegroundColor Cyan
         
         # Download và cài đặt Ngrok
         Invoke-WebRequest -Uri "https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-v3-stable-windows-amd64.zip" -OutFile "ngrok.zip"
@@ -283,7 +283,7 @@ jobs:
           if (Test-Path "TASTRVPS") { Copy-Item -Path "TASTRVPS" -Destination "$backupDir\" -Recurse -Force }
           if (Test-Path "logs") { Copy-Item -Path "logs" -Destination "$backupDir\" -Recurse -Force }
           
-          Write-Host "✅ Backup cơ bản đã hoàn thành: $backupDir" -ForegroundColor Green
+                     Write-Host "Backup cơ bản đã hoàn thành: $backupDir" -ForegroundColor Green
         }
 
     # Step 8: Auto-commit updates
@@ -301,13 +301,13 @@ jobs:
         # Check if there are changes to commit
         $changes = git status --porcelain
         if ($changes) {
-          $commitMessage = "🤖 Auto-update VPS session $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
+                     $commitMessage = "Auto-update VPS session $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
           git commit -m $commitMessage
           
           # Try to push (may fail if no permissions)
           try {
             git push
-            Write-Host "✅ Đã cập nhật repository" -ForegroundColor Green
+                         Write-Host "Đã cập nhật repository" -ForegroundColor Green
           } catch {
             Write-Host "Không thể push changes (có thể do quyền hạn)" -ForegroundColor Yellow
           }
@@ -347,7 +347,7 @@ jobs:
           $memoryUsage = [math]::Round((Get-WmiObject -Class Win32_OperatingSystem).TotalVisibleMemorySize / 1MB, 2)
           $freeSpace = [math]::Round((Get-WmiObject -Class Win32_LogicalDisk -Filter "DeviceID='C:'").FreeSpace / 1GB, 2)
           
-          Write-Host "💓 Health Check - Còn lại: $remaining phút | RDP: $($rdpStatus.Status) | RAM: $memoryUsage GB | Disk: $freeSpace GB free" -ForegroundColor Cyan
+                     Write-Host "Health Check - Còn lại: $remaining phút | RDP: $($rdpStatus.Status) | RAM: $memoryUsage GB | Disk: $freeSpace GB free" -ForegroundColor Cyan
           
           # Log to file
           $logEntry = "$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') - Remaining: $remaining min, RDP: $($rdpStatus.Status), RAM: $memoryUsage GB, Disk: $freeSpace GB"
