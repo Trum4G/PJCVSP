@@ -35,7 +35,7 @@ jobs:
     
     steps:
     # Step 1: Validate inputs
-    - name: 🔍 Validate Inputs
+    - name: Validate Inputs
       shell: powershell
       run: |
         Write-Host "=== Kiểm tra đầu vào ===" -ForegroundColor Green
@@ -69,19 +69,19 @@ jobs:
           exit 1
         }
         
-        Write-Host "✅ Tất cả đầu vào hợp lệ" -ForegroundColor Green
-        Write-Host "📝 VPS Name: $vpsName" -ForegroundColor Cyan
-        Write-Host "🖥️ Runner: GitHub Windows (16GB RAM, 200GB SSD, 4 cores)" -ForegroundColor Cyan
-        Write-Host "⏱️ Timeout: $timeout phút" -ForegroundColor Cyan
-        Write-Host "🔄 Backup: ${{ inputs.backup }}" -ForegroundColor Cyan
+        Write-Host "OK - Tất cả đầu vào hợp lệ" -ForegroundColor Green
+        Write-Host "VPS Name: $vpsName" -ForegroundColor Cyan
+        Write-Host "Runner: GitHub Windows (16GB RAM, 200GB SSD, 4 cores)" -ForegroundColor Cyan
+        Write-Host "Timeout: $timeout phút" -ForegroundColor Cyan
+        Write-Host "Backup: ${{ inputs.backup }}" -ForegroundColor Cyan
 
     # Step 2: Checkout và chuẩn bị
-    - name: 📥 Checkout Repository
+    - name: Checkout Repository
       uses: actions/checkout@v4
       with:
         fetch-depth: 0
 
-    - name: 📁 Prepare Directories
+    - name: Prepare Directories
       shell: powershell
       run: |
         Write-Host "=== Chuẩn bị thư mục ===" -ForegroundColor Green
@@ -91,7 +91,7 @@ jobs:
         foreach ($dir in $dirs) {
           if (!(Test-Path $dir)) {
             New-Item -ItemType Directory -Path $dir -Force
-            Write-Host "✅ Tạo thư mục: $dir" -ForegroundColor Green
+            Write-Host "OK - Tạo thư mục: $dir" -ForegroundColor Green
           }
         }
         
@@ -103,7 +103,7 @@ jobs:
         echo "NGROK_TOKEN=${{ inputs.ngrok_token }}" >> $env:GITHUB_ENV
 
     # Step 2.5: Display System Information
-    - name: 📊 Display System Information
+    - name: Display System Information
       shell: powershell
       run: |
         Write-Host "=== Thông số hệ thống ===" -ForegroundColor Green
@@ -115,62 +115,62 @@ jobs:
         $disk = Get-WmiObject -Class Win32_LogicalDisk -Filter "DeviceID='C:'" | Select-Object Size, FreeSpace
         
         # Display info
-        Write-Host "💻 Computer: $($computerInfo.CsName)" -ForegroundColor Cyan
-        Write-Host "🖥️ OS: $($computerInfo.WindowsProductName)" -ForegroundColor Cyan
-        Write-Host "🔧 CPU: $($cpu.Name)" -ForegroundColor Cyan
-        Write-Host "⚡ CPU Cores: $($cpu.NumberOfCores)" -ForegroundColor Cyan
-        Write-Host "🧠 RAM Total: $([math]::Round($memory.Sum / 1GB, 2)) GB" -ForegroundColor Cyan
-        Write-Host "💾 Disk Total: $([math]::Round($disk.Size / 1GB, 2)) GB" -ForegroundColor Cyan
-        Write-Host "💽 Disk Free: $([math]::Round($disk.FreeSpace / 1GB, 2)) GB" -ForegroundColor Cyan
+        Write-Host "Computer: $($computerInfo.CsName)" -ForegroundColor Cyan
+        Write-Host "OS: $($computerInfo.WindowsProductName)" -ForegroundColor Cyan
+        Write-Host "CPU: $($cpu.Name)" -ForegroundColor Cyan
+        Write-Host "CPU Cores: $($cpu.NumberOfCores)" -ForegroundColor Cyan
+        Write-Host "RAM Total: $([math]::Round($memory.Sum / 1GB, 2)) GB" -ForegroundColor Cyan
+        Write-Host "Disk Total: $([math]::Round($disk.Size / 1GB, 2)) GB" -ForegroundColor Cyan
+        Write-Host "Disk Free: $([math]::Round($disk.FreeSpace / 1GB, 2)) GB" -ForegroundColor Cyan
         
         # Check GPU
         try {
           $gpu = Get-WmiObject -Class Win32_VideoController | Where-Object { $_.Name -notlike "*Basic*" -and $_.Name -notlike "*Generic*" } | Select-Object -First 1
           if ($gpu) {
-            Write-Host "🎮 GPU: $($gpu.Name)" -ForegroundColor Cyan
+            Write-Host "GPU: $($gpu.Name)" -ForegroundColor Cyan
             if ($gpu.AdapterRAM -gt 0) {
-              Write-Host "🎯 VRAM: $([math]::Round($gpu.AdapterRAM / 1GB, 2)) GB" -ForegroundColor Cyan
+              Write-Host "VRAM: $([math]::Round($gpu.AdapterRAM / 1GB, 2)) GB" -ForegroundColor Cyan
             }
           } else {
-            Write-Host "🎮 GPU: Not detected" -ForegroundColor Yellow
+            Write-Host "GPU: Not detected" -ForegroundColor Yellow
           }
         } catch {
-          Write-Host "🎮 GPU: Detection failed" -ForegroundColor Yellow
+          Write-Host "GPU: Detection failed" -ForegroundColor Yellow
         }
         
         # Runner info
-        Write-Host "☁️ Runner: GitHub Windows (Miễn phí)" -ForegroundColor Blue
-        Write-Host "⏰ Time Limit: ${{ inputs.timeout_minutes }} minutes" -ForegroundColor Blue
+        Write-Host "Runner: GitHub Windows (Miễn phí)" -ForegroundColor Blue
+        Write-Host "Time Limit: ${{ inputs.timeout_minutes }} minutes" -ForegroundColor Blue
 
     # Step 3: Restore backup (optional)
-    - name: 📦 Restore Backup (Optional)
+    - name: Restore Backup (Optional)
       if: inputs.backup == true
       shell: powershell
       run: |
         Write-Host "=== Khôi phục Backup ===" -ForegroundColor Green
         
         if (Test-Path "TASTRVPS\backupre-store.sh") {
-          Write-Host "🔄 Chạy script khôi phục backup..." -ForegroundColor Yellow
+          Write-Host "Chạy script khôi phục backup..." -ForegroundColor Yellow
           bash TASTRVPS\backupre-store.sh restore
         } else {
-          Write-Host "⚠️ Không tìm thấy script backup, bỏ qua bước này" -ForegroundColor Yellow
+          Write-Host "Không tìm thấy script backup, bỏ qua bước này" -ForegroundColor Yellow
         }
 
     # Step 4: Load configuration
-    - name: ⚙️ Load Configuration
+    - name: Load Configuration
       shell: powershell
       run: |
         Write-Host "=== Tải cấu hình ===" -ForegroundColor Green
         
         # Install PowerShell-Yaml if not exists
         if (!(Get-Module -ListAvailable -Name powershell-yaml)) {
-          Write-Host "📦 Cài đặt PowerShell-Yaml..." -ForegroundColor Yellow
+          Write-Host "Cài đặt PowerShell-Yaml..." -ForegroundColor Yellow
           Install-Module -Name powershell-yaml -Force -Scope CurrentUser
         }
         
         # Load config if exists
         if (Test-Path "TASTRVPS\config.yml") {
-          Write-Host "📝 Tải cấu hình từ config.yml..." -ForegroundColor Cyan
+          Write-Host "Tải cấu hình từ config.yml..." -ForegroundColor Cyan
           $config = Get-Content "TASTRVPS\config.yml" | ConvertFrom-Yaml
           
           # Set environment variables from config
@@ -183,13 +183,13 @@ jobs:
             echo "TMATE_SERVER=nyc1.tmate.io" >> $env:GITHUB_ENV
           }
         } else {
-          Write-Host "⚠️ Không tìm thấy config.yml, sử dụng cấu hình mặc định" -ForegroundColor Yellow
+          Write-Host "Không tìm thấy config.yml, sử dụng cấu hình mặc định" -ForegroundColor Yellow
           echo "WINDOWS_USER=TASTR" >> $env:GITHUB_ENV
           echo "TMATE_SERVER=nyc1.tmate.io" >> $env:GITHUB_ENV
         }
 
     # Step 5: Setup Windows RDP
-    - name: 🖥️ Setup Windows RDP
+    - name: Setup Windows RDP
       shell: powershell
       run: |
         Write-Host "=== Cài đặt Windows RDP ===" -ForegroundColor Green
@@ -229,7 +229,7 @@ jobs:
         echo "RDP_PASSWORD=$password" >> $env:GITHUB_ENV
 
     # Step 6: Setup Ngrok tunnel với fallback Playit
-    - name: 🌐 Setup Remote Access Tunnel
+    - name: Setup Remote Access Tunnel
       shell: powershell
       run: |
         Write-Host "=== Cài đặt Remote Access ===" -ForegroundColor Green
@@ -255,25 +255,25 @@ jobs:
         try {
           $tunnelInfo = Invoke-RestMethod -Uri "http://localhost:4040/api/tunnels"
           $publicUrl = $tunnelInfo.tunnels[0].public_url
-          Write-Host "🌐 Ngrok URL: $publicUrl" -ForegroundColor Green
+          Write-Host "Ngrok URL: $publicUrl" -ForegroundColor Green
           echo "TUNNEL_URL=$publicUrl" >> $env:GITHUB_ENV
           echo "TUNNEL_TYPE=ngrok" >> $env:GITHUB_ENV
         } catch {
-          Write-Host "⚠️ Không thể lấy thông tin Ngrok tunnel" -ForegroundColor Yellow
-          Write-Host "💡 Hãy kiểm tra Ngrok dashboard để lấy URL kết nối" -ForegroundColor Cyan
+          Write-Host "Không thể lấy thông tin Ngrok tunnel" -ForegroundColor Yellow
+          Write-Host "Hãy kiểm tra Ngrok dashboard để lấy URL kết nối" -ForegroundColor Cyan
         }
 
     # Step 7: Create optimized backup
-    - name: 💾 Create Backup
+    - name: Create Backup
       shell: powershell
       run: |
         Write-Host "=== Tạo Backup ===" -ForegroundColor Green
         
         if (Test-Path "TASTRVPS\backupre-store.sh") {
-          Write-Host "📦 Chạy script tạo backup..." -ForegroundColor Yellow
+          Write-Host "Chạy script tạo backup..." -ForegroundColor Yellow
           bash TASTRVPS\backupre-store.sh backup
         } else {
-          Write-Host "⚠️ Không tìm thấy script backup" -ForegroundColor Yellow
+          Write-Host "Không tìm thấy script backup" -ForegroundColor Yellow
           
           # Simple backup
           $backupDir = "backup-$(Get-Date -Format 'yyyyMMdd-HHmmss')"
@@ -287,7 +287,7 @@ jobs:
         }
 
     # Step 8: Auto-commit updates
-    - name: 📝 Auto-commit Updates
+    - name: Auto-commit Updates
       shell: powershell
       run: |
         Write-Host "=== Cập nhật Repository ===" -ForegroundColor Green
@@ -309,14 +309,14 @@ jobs:
             git push
             Write-Host "✅ Đã cập nhật repository" -ForegroundColor Green
           } catch {
-            Write-Host "⚠️ Không thể push changes (có thể do quyền hạn)" -ForegroundColor Yellow
+            Write-Host "Không thể push changes (có thể do quyền hạn)" -ForegroundColor Yellow
           }
         } else {
-          Write-Host "📝 Không có thay đổi để commit" -ForegroundColor Cyan
+          Write-Host "Không có thay đổi để commit" -ForegroundColor Cyan
         }
 
     # Step 9: Keep-alive monitoring với health checks
-    - name: 🔄 Keep-alive Monitoring
+    - name: Keep-alive Monitoring
       shell: powershell
       run: |
         Write-Host "=== Bắt đầu Keep-alive Monitoring ===" -ForegroundColor Green
@@ -325,8 +325,8 @@ jobs:
         $endTime = (Get-Date).AddMinutes($timeout)
         $checkInterval = 60 # Check every minute
         
-        Write-Host "⏰ VPS sẽ chạy đến: $($endTime.ToString('yyyy-MM-dd HH:mm:ss'))" -ForegroundColor Cyan
-        Write-Host "🌐 Thông tin kết nối:" -ForegroundColor Green
+                  Write-Host "VPS sẽ chạy đến: $($endTime.ToString('yyyy-MM-dd HH:mm:ss'))" -ForegroundColor Cyan
+                  Write-Host "Thông tin kết nối:" -ForegroundColor Green
         Write-Host "   Username: $env:RDP_USERNAME" -ForegroundColor Yellow
         Write-Host "   Password: $env:RDP_PASSWORD" -ForegroundColor Yellow
         Write-Host "   Tunnel Type: $env:TUNNEL_TYPE" -ForegroundColor Yellow
@@ -334,10 +334,10 @@ jobs:
           Write-Host "   Tunnel URL: $env:TUNNEL_URL" -ForegroundColor Yellow
         }
         
-        Write-Host "`n🎯 VPS đã sẵn sàng sử dụng!" -ForegroundColor Green
-        Write-Host "📚 Sử dụng thông tin trên để kết nối RDP và bắt đầu học tập!" -ForegroundColor Cyan
-        Write-Host "⏱️ Thời gian còn lại: $timeout phút" -ForegroundColor Yellow
-        Write-Host "🖥️ Thông số VPS: 16GB RAM, 200GB+ Storage, 4 cores" -ForegroundColor Cyan
+        Write-Host "`nVPS đã sẵn sàng sử dụng!" -ForegroundColor Green
+        Write-Host "Sử dụng thông tin trên để kết nối RDP và bắt đầu học tập!" -ForegroundColor Cyan
+        Write-Host "Thời gian còn lại: $timeout phút" -ForegroundColor Yellow
+        Write-Host "Thông số VPS: 16GB RAM, 200GB+ Storage, 4 cores" -ForegroundColor Cyan
         
         while ((Get-Date) -lt $endTime) {
           $remaining = [math]::Round(($endTime - (Get-Date)).TotalMinutes, 1)
@@ -356,6 +356,6 @@ jobs:
           Start-Sleep -Seconds $checkInterval
         }
         
-        Write-Host "⏰ Thời gian chạy VPS đã hết!" -ForegroundColor Yellow
-        Write-Host "🎓 Cảm ơn bạn đã sử dụng TASTR Windows VPS!" -ForegroundColor Green
-        Write-Host "💡 Bạn có thể chạy lại workflow để tạo VPS mới" -ForegroundColor Cyan
+        Write-Host "Thời gian chạy VPS đã hết!" -ForegroundColor Yellow
+        Write-Host "Cảm ơn bạn đã sử dụng TASTR Windows VPS!" -ForegroundColor Green
+        Write-Host "Bạn có thể chạy lại workflow để tạo VPS mới" -ForegroundColor Cyan
