@@ -79,13 +79,62 @@ jobs:
         # Cài đặt SQLite (đã có sẵn)
         echo "SQLite đã được cài đặt"
         
-        # Cài đặt MySQL
-        choco install -y mysql
-        net start mysql
+        # Cài đặt MySQL (nếu chưa có)
+        if (!(Get-Command mysql -ErrorAction SilentlyContinue)) {
+            choco install -y mysql
+        } else {
+            echo "MySQL đã được cài đặt"
+        }
         
-        # Cài đặt PostgreSQL
-        choco install -y postgresql
-        net start postgresql-x64-15
+        # Khởi động MySQL service
+        try {
+            net start mysql 2>$null
+            echo "MySQL service đã được khởi động"
+        } catch {
+            echo "MySQL service không thể khởi động hoặc đã chạy"
+        }
+        
+        # Cài đặt PostgreSQL (nếu chưa có)
+        if (!(Get-Command psql -ErrorAction SilentlyContinue)) {
+            choco install -y postgresql
+        } else {
+            echo "PostgreSQL đã được cài đặt"
+        }
+        
+        # Khởi động PostgreSQL service (thử các tên service khác nhau)
+        $postgresServices = @("postgresql-x64-17", "postgresql-x64-16", "postgresql-x64-15", "postgresql-x64-14", "postgresql")
+        $postgresStarted = $false
+        
+        foreach ($service in $postgresServices) {
+            try {
+                net start $service 2>$null
+                echo "PostgreSQL service ($service) đã được khởi động"
+                $postgresStarted = $true
+                break
+            } catch {
+                echo "Không thể khởi động PostgreSQL service: $service"
+            }
+        }
+        
+        if (-not $postgresStarted) {
+            echo "Không thể khởi động PostgreSQL service. Có thể cần cấu hình thủ công."
+        }
+        
+        # Hiển thị thông tin database
+        echo "=== Database Status ==="
+        echo "SQLite: Đã sẵn sàng"
+        
+        if (Get-Command mysql -ErrorAction SilentlyContinue) {
+            echo "MySQL: Đã cài đặt"
+        } else {
+            echo "MySQL: Chưa cài đặt"
+        }
+        
+        if (Get-Command psql -ErrorAction SilentlyContinue) {
+            echo "PostgreSQL: Đã cài đặt"
+        } else {
+            echo "PostgreSQL: Chưa cài đặt"
+        }
         
     - name: Cài đặt các ngôn ngữ lập trình
       if: ${{ github.event.inputs.setup_tools }}
@@ -253,8 +302,29 @@ jobs:
         rustc --version
         
         echo "=== Database services ==="
-        sc query mysql
-        sc query postgresql-x64-15
+        try {
+            sc query mysql 2>$null
+        } catch {
+            echo "MySQL service không tìm thấy"
+        }
+        
+        # Kiểm tra PostgreSQL services
+        $postgresServices = @("postgresql-x64-17", "postgresql-x64-16", "postgresql-x64-15", "postgresql-x64-14", "postgresql")
+        $postgresFound = $false
+        
+        foreach ($service in $postgresServices) {
+            try {
+                sc query $service 2>$null
+                $postgresFound = $true
+                break
+            } catch {
+                # Continue to next service
+            }
+        }
+        
+        if (-not $postgresFound) {
+            echo "PostgreSQL service không tìm thấy"
+        }
         
         echo "=== Ngrok status ==="
         ${{ github.event.inputs.ngrok_authtoken != '' && 'ngrok version' || 'echo "Ngrok not configured"' }}
