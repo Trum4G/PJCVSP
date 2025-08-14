@@ -1,0 +1,337 @@
+name: Windows VM for Learning and Projects
+
+on:
+  workflow_dispatch:
+    inputs:
+      vm_type:
+        description: 'Loại máy ảo Windows'
+        required: true
+        default: 'windows-latest'
+        type: choice
+        options:
+        - windows-latest
+        - windows-2022
+        - windows-2019
+      setup_tools:
+        description: 'Cài đặt công cụ phát triển'
+        required: true
+        default: true
+        type: boolean
+      setup_database:
+        description: 'Cài đặt cơ sở dữ liệu local'
+        required: true
+        default: true
+        type: boolean
+      run_time_minutes:
+        description: 'Thời gian chạy máy ảo (phút) - Tối đa 360 phút'
+        required: true
+        default: '360'
+        type: string
+      ngrok_authtoken:
+        description: 'Ngrok Authtoken (để giữ máy ảo luôn live)'
+        required: false
+        default: ''
+        type: string
+
+jobs:
+  setup-windows-vm:
+    runs-on: ${{ github.event.inputs.vm_type }}
+    timeout-minutes: ${{ github.event.inputs.run_time_minutes || 360 }}
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Hiển thị thông tin hệ thống
+      run: |
+        echo "=== Thông tin hệ thống ==="
+        systeminfo | findstr /B /C:"OS Name" /C:"OS Version" /C:"System Type"
+        echo "=== Thông tin CPU ==="
+        wmic cpu get name,numberofcores
+        echo "=== Thông tin RAM ==="
+        wmic computersystem get TotalPhysicalMemory
+        echo "=== Thông tin ổ cứng ==="
+        wmic logicaldisk get size,freespace,caption
+        echo "=== Thời gian chạy ==="
+        echo "Thời gian chạy: ${{ github.event.inputs.run_time_minutes }} phút"
+        
+    - name: Cài đặt Chocolatey (Package Manager)
+      if: ${{ github.event.inputs.setup_tools }}
+      run: |
+        Set-ExecutionPolicy Bypass -Scope Process -Force
+        [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072
+        iex ((New-Object System.Net.WebClient).DownloadString('https://community.chocolatey.org/install.ps1'))
+        
+    - name: Cài đặt công cụ phát triển
+      if: ${{ github.event.inputs.setup_tools }}
+      run: |
+        choco install -y git nodejs python visualstudio2022buildtools
+        choco install -y vscode notepadplusplus
+        choco install -y postman insomnia
+        choco install -y docker-desktop
+        choco install -y mysql postgresql sqlite
+        
+    - name: Cài đặt cơ sở dữ liệu local
+      if: ${{ github.event.inputs.setup_database }}
+      run: |
+        # Cài đặt SQLite (đã có sẵn)
+        echo "SQLite đã được cài đặt"
+        
+        # Cài đặt MySQL
+        choco install -y mysql
+        net start mysql
+        
+        # Cài đặt PostgreSQL
+        choco install -y postgresql
+        net start postgresql-x64-15
+        
+    - name: Cài đặt các ngôn ngữ lập trình
+      if: ${{ github.event.inputs.setup_tools }}
+      run: |
+        # Cài đặt Java
+        choco install -y openjdk11
+        
+        # Cài đặt .NET
+        choco install -y dotnet-sdk
+        
+        # Cài đặt Go
+        choco install -y golang
+        
+        # Cài đặt Rust
+        choco install -y rust
+        
+    - name: Cài đặt các framework và thư viện
+      if: ${{ github.event.inputs.setup_tools }}
+      run: |
+        # Cài đặt các framework web
+        npm install -g express-generator
+        npm install -g @angular/cli
+        npm install -g @vue/cli
+        npm install -g create-react-app
+        
+        # Cài đặt các công cụ Python
+        pip install django flask fastapi
+        pip install jupyter notebook
+        pip install pandas numpy matplotlib
+        
+    - name: Cài đặt và cấu hình Ngrok
+      if: ${{ github.event.inputs.ngrok_authtoken != '' }}
+      run: |
+        # Cài đặt Ngrok
+        choco install -y ngrok
+        
+        # Cấu hình Ngrok authtoken
+        ngrok config add-authtoken ${{ github.event.inputs.ngrok_authtoken }}
+        
+        # Tạo file cấu hình Ngrok
+        $ngrokConfig = @"
+        version: "2"
+        authtoken: ${{ github.event.inputs.ngrok_authtoken }}
+        tunnels:
+          ssh:
+            proto: tcp
+            addr: 22
+          rdp:
+            proto: tcp
+            addr: 3389
+          web:
+            proto: http
+            addr: 3000
+          api:
+            proto: http
+            addr: 8000
+        "@
+        
+        $ngrokConfig | Out-File -FilePath "$env:USERPROFILE\.ngrok2\ngrok.yml" -Encoding UTF8
+        
+        echo "Ngrok đã được cấu hình với authtoken"
+        
+    - name: Tạo thư mục dự án
+      run: |
+        mkdir C:\Projects
+        mkdir C:\Projects\Learning
+        mkdir C:\Projects\School
+        mkdir C:\Projects\Personal
+        
+    - name: Tạo file README cho dự án
+      run: |
+        @"
+        # Windows VM Environment
+        
+        ## Thông tin hệ thống
+        - OS: Windows Server 2022
+        - Được tạo bởi: GitHub Actions
+        - Mục đích: Học tập và làm đồ án
+        - Thời gian chạy: ${{ github.event.inputs.run_time_minutes }} phút
+        - Ngrok: ${{ github.event.inputs.ngrok_authtoken != '' && 'Đã cấu hình' || 'Chưa cấu hình' }}
+        
+        ## Công cụ đã cài đặt
+        - Git
+        - Node.js
+        - Python
+        - Visual Studio Build Tools
+        - VS Code
+        - Docker Desktop
+        - MySQL
+        - PostgreSQL
+        - SQLite
+        ${{ github.event.inputs.ngrok_authtoken != '' && '- Ngrok (đã cấu hình)' || '' }}
+        
+        ## Ngôn ngữ lập trình
+        - Java (OpenJDK 11)
+        - .NET
+        - Go
+        - Rust
+        
+        ## Framework
+        - Express.js
+        - Angular
+        - Vue.js
+        - React
+        - Django
+        - Flask
+        - FastAPI
+        
+        ## Thư mục dự án
+        - C:\Projects\Learning - Cho việc học tập
+        - C:\Projects\School - Cho đồ án trường
+        - C:\Projects\Personal - Cho dự án cá nhân
+        
+        ## Sử dụng
+        1. Clone repository về máy
+        2. Mở VS Code
+        3. Bắt đầu coding!
+        
+        ## Ngrok (nếu đã cấu hình)
+        ${{ github.event.inputs.ngrok_authtoken != '' && 'Để kết nối từ bên ngoài:' || '' }}
+        ${{ github.event.inputs.ngrok_authtoken != '' && '- SSH: ngrok tcp 22' || '' }}
+        ${{ github.event.inputs.ngrok_authtoken != '' && '- RDP: ngrok tcp 3389' || '' }}
+        ${{ github.event.inputs.ngrok_authtoken != '' && '- Web: ngrok http 3000' || '' }}
+        ${{ github.event.inputs.ngrok_authtoken != '' && '- API: ngrok http 8000' || '' }}
+        
+        ## Lưu ý
+        - Máy ảo này sẽ tự động hủy sau ${{ github.event.inputs.run_time_minutes }} phút
+        - Để lưu trữ dữ liệu, hãy commit và push code lên GitHub
+        "@ | Out-File -FilePath "C:\Projects\README.md" -Encoding UTF8
+        
+    - name: Tạo script khởi động Ngrok
+      if: ${{ github.event.inputs.ngrok_authtoken != '' }}
+      run: |
+        $ngrokScript = @"
+        @echo off
+        echo Starting Ngrok tunnels...
+        
+        REM Start SSH tunnel
+        start "Ngrok SSH" ngrok tcp 22
+        
+        REM Start RDP tunnel  
+        start "Ngrok RDP" ngrok tcp 3389
+        
+        REM Start web tunnel
+        start "Ngrok Web" ngrok http 3000
+        
+        REM Start API tunnel
+        start "Ngrok API" ngrok http 8000
+        
+        echo Ngrok tunnels started!
+        echo Check ngrok status at: http://localhost:4040
+        "@
+        
+        $ngrokScript | Out-File -FilePath "C:\Projects\start-ngrok.bat" -Encoding ASCII
+        
+    - name: Hiển thị thông tin cài đặt
+      run: |
+        echo "=== Công cụ đã cài đặt ==="
+        git --version
+        node --version
+        python --version
+        java -version
+        dotnet --version
+        go version
+        rustc --version
+        
+        echo "=== Database services ==="
+        sc query mysql
+        sc query postgresql-x64-15
+        
+        echo "=== Ngrok status ==="
+        ${{ github.event.inputs.ngrok_authtoken != '' && 'ngrok version' || 'echo "Ngrok not configured"' }}
+        
+        echo "=== Thư mục dự án ==="
+        dir C:\Projects
+        
+    - name: Tạo artifact với thông tin môi trường
+      run: |
+        $envInfo = @"
+        # Thông tin môi trường Windows VM
+        Ngày tạo: $(Get-Date)
+        OS: $env:OS
+        Architecture: $env:PROCESSOR_ARCHITECTURE
+        Username: $env:USERNAME
+        Computer Name: $env:COMPUTERNAME
+        Thời gian chạy: ${{ github.event.inputs.run_time_minutes }} phút
+        Ngrok: ${{ github.event.inputs.ngrok_authtoken != '' && 'Đã cấu hình' || 'Chưa cấu hình' }}
+        
+        ## Công cụ đã cài đặt:
+        - Git: $(git --version 2>$null)
+        - Node.js: $(node --version 2>$null)
+        - Python: $(python --version 2>$null)
+        - Java: $(java -version 2>&1 | Select-Object -First 1)
+        - .NET: $(dotnet --version 2>$null)
+        - Go: $(go version 2>$null)
+        - Rust: $(rustc --version 2>$null)
+        ${{ github.event.inputs.ngrok_authtoken != '' && '- Ngrok: $(ngrok version 2>$null)' || '' }}
+        
+        ## Thư mục dự án:
+        - C:\Projects\Learning
+        - C:\Projects\School  
+        - C:\Projects\Personal
+        
+        ## Hướng dẫn sử dụng:
+        1. Mở VS Code: code C:\Projects
+        2. Tạo dự án mới trong thư mục phù hợp
+        3. Sử dụng Git để quản lý version
+        4. Commit và push code thường xuyên
+        ${{ github.event.inputs.ngrok_authtoken != '' && '5. Chạy C:\Projects\start-ngrok.bat để khởi động tunnels' || '' }}
+        "@
+        
+        $envInfo | Out-File -FilePath "environment-info.md" -Encoding UTF8
+        
+    - name: Upload environment info
+      uses: actions/upload-artifact@v4
+      with:
+        name: windows-vm-info
+        path: environment-info.md
+        retention-days: 30
+        
+    - name: Thông báo hoàn thành
+      run: |
+        echo "🎉 Máy ảo Windows đã được thiết lập thành công!"
+        echo "📁 Thư mục dự án: C:\Projects"
+        echo "🛠️ Các công cụ phát triển đã sẵn sàng"
+        echo "💾 Database local đã được cài đặt"
+        echo "⏰ Thời gian chạy: ${{ github.event.inputs.run_time_minutes }} phút"
+        ${{ github.event.inputs.ngrok_authtoken != '' && 'echo "🌐 Ngrok đã được cấu hình để giữ máy ảo luôn live"' || '' }}
+        echo "🚀 Bắt đầu coding ngay bây giờ!"
+        
+    - name: Giữ máy ảo live với Ngrok
+      if: ${{ github.event.inputs.ngrok_authtoken != '' }}
+      run: |
+        echo "Khởi động Ngrok để giữ máy ảo luôn live..."
+        
+        # Khởi động Ngrok tunnels
+        Start-Process -FilePath "ngrok" -ArgumentList "tcp", "22" -WindowStyle Minimized
+        Start-Process -FilePath "ngrok" -ArgumentList "tcp", "3389" -WindowStyle Minimized
+        Start-Process -FilePath "ngrok" -ArgumentList "http", "3000" -WindowStyle Minimized
+        Start-Process -FilePath "ngrok" -ArgumentList "http", "8000" -WindowStyle Minimized
+        
+        # Hiển thị thông tin kết nối
+        Start-Sleep -Seconds 5
+        echo "=== Ngrok Tunnels ==="
+        echo "SSH: $(ngrok api tunnels list | ConvertFrom-Json | Where-Object {$_.config.addr -eq 'localhost:22'} | Select-Object -ExpandProperty public_url)"
+        echo "RDP: $(ngrok api tunnels list | ConvertFrom-Json | Where-Object {$_.config.addr -eq 'localhost:3389'} | Select-Object -ExpandProperty public_url)"
+        echo "Web: $(ngrok api tunnels list | ConvertFrom-Json | Where-Object {$_.config.addr -eq 'localhost:3000'} | Select-Object -ExpandProperty public_url)"
+        echo "API: $(ngrok api tunnels list | ConvertFrom-Json | Where-Object {$_.config.addr -eq 'localhost:8000'} | Select-Object -ExpandProperty public_url)"
+        
+        echo "Ngrok đã được khởi động để giữ máy ảo luôn live!"
+        echo "Kiểm tra trạng thái tại: http://localhost:4040"
