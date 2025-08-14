@@ -95,12 +95,12 @@ jobs:
           }
         }
         
-        # Set environment variables
-        echo "VPS_NAME=${{ inputs.vps_name || 'TASTR-VPS' }}" >> $env:GITHUB_ENV
-        echo "BACKUP_ENABLED=${{ inputs.backup }}" >> $env:GITHUB_ENV
-        echo "TIMEOUT_MINUTES=${{ inputs.timeout_minutes || '360' }}" >> $env:GITHUB_ENV
-        echo "WINDOWS_PASSWORD=${{ inputs.windows_password }}" >> $env:GITHUB_ENV
-        echo "NGROK_TOKEN=${{ inputs.ngrok_token }}" >> $env:GITHUB_ENV
+                 # Set environment variables
+         "VPS_NAME=${{ inputs.vps_name || 'TASTR-VPS' }}" >> $env:GITHUB_ENV
+         "BACKUP_ENABLED=${{ inputs.backup }}" >> $env:GITHUB_ENV
+         "TIMEOUT_MINUTES=${{ inputs.timeout_minutes || '360' }}" >> $env:GITHUB_ENV
+         "WINDOWS_PASSWORD=${{ inputs.windows_password }}" >> $env:GITHUB_ENV
+         "NGROK_TOKEN=${{ inputs.ngrok_token }}" >> $env:GITHUB_ENV
 
     # Step 2.5: Display System Information
     - name: Display System Information
@@ -173,19 +173,19 @@ jobs:
           Write-Host "Tải cấu hình từ config.yml..." -ForegroundColor Cyan
           $config = Get-Content "TASTRVPS\config.yml" | ConvertFrom-Yaml
           
-          # Set environment variables from config
-          # Always use TASTR as the username
-          echo "WINDOWS_USER=TASTR" >> $env:GITHUB_ENV
-          
-          if ($config.tmate_server) {
-            echo "TMATE_SERVER=$($config.tmate_server)" >> $env:GITHUB_ENV
-          } else {
-            echo "TMATE_SERVER=nyc1.tmate.io" >> $env:GITHUB_ENV
-          }
-        } else {
-          Write-Host "Không tìm thấy config.yml, sử dụng cấu hình mặc định" -ForegroundColor Yellow
-          echo "WINDOWS_USER=TASTR" >> $env:GITHUB_ENV
-          echo "TMATE_SERVER=nyc1.tmate.io" >> $env:GITHUB_ENV
+                     # Set environment variables from config
+           # Always use TASTR as the username
+           "WINDOWS_USER=TASTR" >> $env:GITHUB_ENV
+           
+           if ($config.tmate_server) {
+             "TMATE_SERVER=$($config.tmate_server)" >> $env:GITHUB_ENV
+           } else {
+             "TMATE_SERVER=nyc1.tmate.io" >> $env:GITHUB_ENV
+           }
+         } else {
+           Write-Host "Không tìm thấy config.yml, sử dụng cấu hình mặc định" -ForegroundColor Yellow
+           "WINDOWS_USER=TASTR" >> $env:GITHUB_ENV
+           "TMATE_SERVER=nyc1.tmate.io" >> $env:GITHUB_ENV
         }
 
     # Step 5: Setup Windows RDP
@@ -224,9 +224,9 @@ jobs:
          Write-Host "Username: $username" -ForegroundColor Cyan
          Write-Host "Password: [HIDDEN]" -ForegroundColor Cyan
         
-        # Save credentials to environment
-        echo "RDP_USERNAME=$username" >> $env:GITHUB_ENV
-        echo "RDP_PASSWORD=$password" >> $env:GITHUB_ENV
+                 # Save credentials to environment
+         "RDP_USERNAME=$username" >> $env:GITHUB_ENV
+         "RDP_PASSWORD=$password" >> $env:GITHUB_ENV
 
     # Step 6: Setup Ngrok tunnel với fallback Playit
     - name: Setup Remote Access Tunnel
@@ -255,9 +255,9 @@ jobs:
         try {
           $tunnelInfo = Invoke-RestMethod -Uri "http://localhost:4040/api/tunnels"
           $publicUrl = $tunnelInfo.tunnels[0].public_url
-          Write-Host "Ngrok URL: $publicUrl" -ForegroundColor Green
-          echo "TUNNEL_URL=$publicUrl" >> $env:GITHUB_ENV
-          echo "TUNNEL_TYPE=ngrok" >> $env:GITHUB_ENV
+                     Write-Host "Ngrok URL: $publicUrl" -ForegroundColor Green
+           "TUNNEL_URL=$publicUrl" >> $env:GITHUB_ENV
+           "TUNNEL_TYPE=ngrok" >> $env:GITHUB_ENV
         } catch {
           Write-Host "Không thể lấy thông tin Ngrok tunnel" -ForegroundColor Yellow
           Write-Host "Hãy kiểm tra Ngrok dashboard để lấy URL kết nối" -ForegroundColor Cyan
