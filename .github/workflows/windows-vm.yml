@@ -15,9 +15,8 @@ jobs:
     timeout-minutes: 360
 
     steps:
-      - name: Setup RDP Session
+      - name: Setup Optimized RDP Session
         env:
-          # Đã loại bỏ các secret của Telegram
           NGROK_AUTH_TOKEN: ${{ secrets.NGROK_AUTH_TOKEN }}
           RUNTIME: ${{ github.event.inputs.runtime_minutes }}
         shell: pwsh
@@ -31,12 +30,17 @@ jobs:
           net localgroup "Remote Desktop Users" $User /add
           net user runneradmin /active:no
           
-          # == PHẦN 2: KÍCH HOẠT RDP VÀ TỐI ƯU HÓA ==
+          # == PHẦN 2: KÍCH HOẠT RDP VÀ TỐI ƯU HÓA HIỆU NĂNG ==
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -name "fDenyTSConnections" -value 0
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -name "UserAuthentication" -value 0
           Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
           
-          # == PHẦN 3: CHẠY NGROK VÀ IN THÔNG TIN RA LOG ==
+          # --- GỢI Ý 9: TĂNG CƯỜNG HIỆU NĂNG RDP ---
+          Set-ItemProperty -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services' -name "fEnableRemoteFXAdvancedRemoteApp" -value 1 -Force
+          Set-ItemProperty -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services' -name "bEnforcePrerequisites" -value 1 -Force
+          # --- KẾT THÚC GỢI Ý 9 ---
+
+          # == PHẦN 3: CHẠY NGROK TẠI CHÂU Á VÀ IN THÔNG TIN ==
           try {
               Invoke-WebRequest -Uri "https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-v3-stable-windows-amd64.zip" -OutFile "ngrok.zip" -ErrorAction Stop
               Expand-Archive ngrok.zip -ErrorAction Stop
@@ -45,19 +49,19 @@ jobs:
               exit 1
           }
           ./ngrok/ngrok.exe config add-authtoken $env:NGROK_AUTH_TOKEN
+          # Thêm "--region ap" để chọn máy chủ Châu Á/Thái Bình Dương, gần Việt Nam nhất
           Start-Process -FilePath "./ngrok/ngrok.exe" -ArgumentList "tcp 3389 --log=stdout --region ap" -WindowStyle Hidden
           Start-Sleep -Seconds 8
           
           try {
             $public_url = (Invoke-RestMethod -Uri "http://127.0.0.1:4040/api/tunnels").tunnels[0].public_url
-            # In thông tin đăng nhập ra log để người dùng xem
             Write-Host "====================== RDP Info ======================"
             Write-Host "        USER: $User"
             Write-Host "    PASSWORD: $Password"
             Write-Host "     ADDRESS: $public_url"
             Write-Host "======================================================"
           } catch { 
-            Write-Host "❌ LỖI: Không thể lấy địa chỉ Ngrok. Vui lòng kiểm tra lại."
+            Write-Host "❌ LỖI: Không thể lấy địa chỉ Ngrok."
             exit 1
           }
 
@@ -66,7 +70,6 @@ jobs:
           $maxMinutes = [int]$env:RUNTIME
           while (((Get-Date) - $startTime).TotalMinutes -lt $maxMinutes) {
               $remainingMinutes = [math]::Round($maxMinutes - ((Get-Date) - $startTime).TotalMinutes, 1)
-              # In thời gian còn lại ra log
               Write-Host "⏳ Thời gian còn lại: ${remainingMinutes} phút..."
               Start-Sleep -Seconds 60
           }
