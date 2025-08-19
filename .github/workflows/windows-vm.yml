@@ -6,7 +6,7 @@ on:
       runtime_minutes:
         description: 'Nhập thời gian chạy (phút). Tối đa 355 để có 5 phút dự phòng.'
         required: true
-        default: '120'
+        default: '60'
         type: string
 
 jobs:
@@ -15,22 +15,33 @@ jobs:
     timeout-minutes: 360
 
     steps:
-      # GỢI Ý 11: CACHE CÁC GÓI CÀI ĐẶT CHO NHANH HƠN
-      - name: Cache Chocolatey packages
-        uses: actions/cache@v4
-        with:
-          path: C:\ProgramData\chocolatey\lib
-          key: ${{ runner.os }}-choco-v1-${{ hashFiles('**/windows-build.yml') }}
-
-      - name: Setup RDP with Data Sync & Caching
+      - name: Setup RDP & Send Detailed Notifications
         env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           NGROK_AUTH_TOKEN: ${{ secrets.NGROK_AUTH_TOKEN }}
-          # Thêm secret của Rclone vào đây
-          RCLONE_CONF: ${{ secrets.RCLONE_CONF }}
           RUNTIME: ${{ github.event.inputs.runtime_minutes }}
         shell: pwsh
         run: |
-          # == PHẦN 1: TẠO USER VÀ CÀI ĐẶT PHẦN MỀM CẦN THIẾT ==
+          # == PHẦN 1: THU THẬP THÔNG TIN HỆ THỐNG ==
+          $startTime = Get-Date
+          $maxMinutes = [int]$env:RUNTIME
+          $endTime = ($startTime).AddMinutes($maxMinutes).ToString("HH:mm 'ngày' dd/MM/yyyy")
+
+          $cpu = (wmic cpu get name).Trim() | Where-Object { $_ }
+          $ram = [math]::Round((Get-ComputerInfo).TotalPhysicalMemory / 1GB)
+          $disk = [math]::Round((Get-Volume C).SizeRemaining / 1GB, 1)
+          
+          try {
+            $ipInfo = Invoke-RestMethod -Uri "ipinfo.io"
+            $location = "$($ipInfo.city), $($ipInfo.country)"
+            $publicIP = $ipInfo.ip
+          } catch {
+            $location = "Không xác định"
+            $publicIP = "Không xác định"
+          }
+
+          # == PHẦN 2: TẠO USER VÀ MẬT KHẨU ==
           $char_set = ('a'..'z') + ('A'..'Z') + ('0'..'9')
           $Password = -join ($char_set | Get-Random -Count 14)
           $User = "TASTR"
@@ -39,54 +50,62 @@ jobs:
           net localgroup "Remote Desktop Users" $User /add
           net user runneradmin /active:no
           
-          # Cài đặt Rclone bằng Chocolatey
-          choco install rclone -y --force
-          
-          # == PHẦN 2: KÍCH HOẠT RDP VÀ TỐI ƯU HÓA ==
+          # == PHẦN 3: KÍCH HOẠT RDP VÀ TỐI ƯU HÓA ==
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -name "fDenyTSConnections" -value 0
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -name "UserAuthentication" -value 0
           Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
           
-          # == GỢI Ý 10: ĐỒNG BỘ DỮ LIỆU TỪ CLOUD VỀ MÁY ẢO ==
-          # Tạo lại file cấu hình Rclone từ secret
-          New-Item -Path "C:\Users\TASTR\.config\rclone" -ItemType Directory -Force
-          Set-Content -Path "C:\Users\TASTR\.config\rclone\rclone.conf" -Value $env:RCLONE_CONF
-          
-          # TẠO THƯ MỤC LÀM VIỆC
-          New-Item -Path "C:\Users\TASTR\Desktop\Project" -ItemType Directory -Force
-          
-          Write-Host "✅ Đang đồng bộ dữ liệu từ Cloud về máy ảo..."
-          # THAY ĐỔI "gdrive:Project" cho đúng với cấu hình của bạn
-          # "gdrive" là tên remote bạn đặt ở Bước 1. "Project" là tên thư mục trên cloud.
-          rclone sync "gdrive:Project" "C:\Users\TASTR\Desktop\Project" --progress
-          
-          # == PHẦN 3: CHẠY NGROK VÀ IN THÔNG TIN ==
-          Invoke-WebRequest -Uri "https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-v3-stable-windows-amd64.zip" -OutFile "ngrok.zip"
-          Expand-Archive ngrok.zip
+          # == PHẦN 4: CHẠY NGROK VÀ GỬI THÔNG BÁO ==
+          try {
+              Invoke-WebRequest -Uri "https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-v3-stable-windows-amd64.zip" -OutFile "ngrok.zip" -ErrorAction Stop
+              Expand-Archive ngrok.zip -ErrorAction Stop
+          } catch {
+              Write-Host "❌ LỖI NGHIÊM TRỌNG: Không thể tải hoặc giải nén Ngrok."
+              exit 1
+          }
           ./ngrok/ngrok.exe config add-authtoken $env:NGROK_AUTH_TOKEN
           Start-Process -FilePath "./ngrok/ngrok.exe" -ArgumentList "tcp 3389 --log=stdout --region ap" -WindowStyle Hidden
           Start-Sleep -Seconds 8
           
-          $public_url = (Invoke-RestMethod -Uri "http://127.0.0.1:4040/api/tunnels").tunnels[0].public_url
-          Write-Host "====================== RDP Info ======================"
-          Write-Host "        USER: $User"
-          Write-Host "    PASSWORD: $Password"
-          Write-Host "     ADDRESS: $public_url"
-          Write-Host "======================================================"
+          $CountdownMessageID = ""
+          try {
+            $ngrok_url = (Invoke-RestMethod -Uri "http://127.0.0.1:4040/api/tunnels").tunnels[0].public_url
+            
+            # Soạn tin nhắn thông tin chi tiết
+            $InfoMessage = @"
+✅ **Máy ảo của bạn đã sẵn sàng!**
 
-          # == PHẦN 4: ĐẾM NGƯỢC VÀ TỰ ĐỘNG TẮT ==
-          $startTime = Get-Date
-          $maxMinutes = [int]$env:RUNTIME
-          while (((Get-Date) - $startTime).TotalMinutes -lt $maxMinutes) {
-              $remainingMinutes = [math]::Round($maxMinutes - ((Get-Date) - $startTime).TotalMinutes, 1)
-              Write-Host "⏳ Thời gian còn lại: ${remainingMinutes} phút..."
-              Start-Sleep -Seconds 60
+**Cấu hình:**
+- **CPU:** `${cpu}`
+- **RAM:** `${ram} GB`
+- **Ổ đĩa trống:** `${disk} GB`
+
+**Thông tin Mạng:**
+- **Địa chỉ IP:** `${publicIP}`
+- **Vị trí:** `${location}`
+
+**Thông tin Đăng nhập:**
+- **Địa chỉ RDP:** `${ngrok_url}`
+- **User:** `${User}`
+- **Pass:** `${Password}`
+"@
+            Invoke-RestMethod -Uri "https://api.telegram.org/bot${env:TELEGRAM_BOT_TOKEN}/sendMessage?chat_id=${env:TELEGRAM_CHAT_ID}&text=${InfoMessage}&parse_mode=Markdown"
+            
+            # Soạn tin nhắn đếm ngược
+            $CountdownInitialMessage = "⏳ *Bắt đầu đếm ngược...*`n`*Dự kiến kết thúc lúc: ${endTime}*"
+            $sentCountdownMessage = Invoke-RestMethod -Uri "https://api.telegram.org/bot${env:TELEGRAM_BOT_TOKEN}/sendMessage?chat_id=${env:TELEGRAM_CHAT_ID}&text=${CountdownInitialMessage}&parse_mode=Markdown"
+            $CountdownMessageID = $sentCountdownMessage.result.message_id
+          } catch { Write-Host "❌ Đã xảy ra lỗi khi gửi thông báo." }
+
+          # == PHẦN 5: ĐẾM NGƯỢC VÀ CẬP NHẬT TIN NHẮN ==
+          if ($CountdownMessageID) {
+            while (((Get-Date) - $startTime).TotalMinutes -lt $maxMinutes) {
+                $remainingMinutes = [math]::Round($maxMinutes - ((Get-Date) - $startTime).TotalMinutes, 1)
+                $UpdatedCountdownMessage = "⏳ *Thời gian còn lại: **${remainingMinutes}** phút.*`n`*Dự kiến kết thúc lúc: ${endTime}*"
+                try { Invoke-RestMethod -Uri "https://api.telegram.org/bot${env:TELEGRAM_BOT_TOKEN}/editMessageText?chat_id=${env:TELEGRAM_CHAT_ID}&message_id=${CountdownMessageID}&text=${UpdatedCountdownMessage}&parse_mode=Markdown" } catch {}
+                Start-Sleep -Seconds 60
+            }
+            $FinalMessage = "❌ **Hết giờ!** `n`*Phiên làm việc đã kết thúc.*"
+            try { Invoke-RestMethod -Uri "https://api.telegram.org/bot${env:TELEGRAM_BOT_TOKEN}/editMessageText?chat_id=${env:TELEGRAM_CHAT_ID}&message_id=${CountdownMessageID}&text=${FinalMessage}&parse_mode=Markdown" } catch {}
           }
-          
-          # == GỢI Ý 10: ĐỒNG BỘ DỮ LIỆU TỪ MÁY ẢO LÊN CLOUD TRƯỚC KHI TẮT ==
-          Write-Host "⌛ Hết giờ! Đang đồng bộ dữ liệu lên Cloud trước khi ngắt kết nối..."
-          # THAY ĐỔI "gdrive:Project" cho đúng với cấu hình của bạn
-          rclone sync "C:\Users\TASTR\Desktop\Project" "gdrive:Project" --progress
-          
-          Write-Host "✅ Đồng bộ hoàn tất. Ngắt kết nối Ngrok..."
           try { Stop-Process -Name "ngrok" -Force } catch {}
