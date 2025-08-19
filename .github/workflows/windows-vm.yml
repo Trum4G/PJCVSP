@@ -27,11 +27,9 @@ jobs:
           $startTime = Get-Date
           $maxMinutes = [int]$env:RUNTIME
           $endTime = ($startTime).AddMinutes($maxMinutes).ToString("HH:mm 'ngày' dd/MM/yyyy")
-
           $cpu = (wmic cpu get name).Trim() | Where-Object { $_ }
           $ram = [math]::Round((Get-ComputerInfo).TotalPhysicalMemory / 1GB)
           $disk = [math]::Round((Get-Volume C).SizeRemaining / 1GB, 1)
-          
           try {
             $ipInfo = Invoke-RestMethod -Uri "ipinfo.io"
             $location = "$($ipInfo.city), $($ipInfo.country)"
@@ -71,27 +69,23 @@ jobs:
           try {
             $ngrok_url = (Invoke-RestMethod -Uri "http://127.0.0.1:4040/api/tunnels").tunnels[0].public_url
             
-            # Soạn tin nhắn thông tin chi tiết
-            $InfoMessage = @"
-✅ **Máy ảo của bạn đã sẵn sàng!**
-
-**Cấu hình:**
-- **CPU:** `${cpu}`
-- **RAM:** `${ram} GB`
-- **Ổ đĩa trống:** `${disk} GB`
-
-**Thông tin Mạng:**
-- **Địa chỉ IP:** `${publicIP}`
-- **Vị trí:** `${location}`
-
-**Thông tin Đăng nhập:**
-- **Địa chỉ RDP:** `${ngrok_url}`
-- **User:** `${User}`
-- **Pass:** `${Password}`
-"@
-            Invoke-RestMethod -Uri "https://api.telegram.org/bot${env:TELEGRAM_BOT_TOKEN}/sendMessage?chat_id=${env:TELEGRAM_CHAT_ID}&text=${InfoMessage}&parse_mode=Markdown"
+            # --- PHẦN ĐÃ SỬA LỖI ---
+            # Sử dụng phương pháp nối chuỗi an toàn để tạo tin nhắn
+            $InfoMessage = "✅ **Máy ảo của bạn đã sẵn sàng!**`n`n" +
+                           "**Cấu hình:**`n" +
+                           "- **CPU:** " + $cpu + "`n" +
+                           "- **RAM:** " + $ram + " GB`n" +
+                           "- **Ổ đĩa trống:** " + $disk + " GB`n`n" +
+                           "**Thông tin Mạng:**`n" +
+                           "- **Địa chỉ IP:** " + $publicIP + "`n" +
+                           "- **Vị trí:** " + $location + "`n`n" +
+                           "**Thông tin Đăng nhập:**`n" +
+                           "- **Địa chỉ RDP:** " + $ngrok_url + "`n" +
+                           "- **User:** " + $User + "`n" +
+                           "- **Pass:** " + $Password
+            # --- KẾT THÚC PHẦN SỬA LỖI ---
             
-            # Soạn tin nhắn đếm ngược
+            Invoke-RestMethod -Uri "https://api.telegram.org/bot${env:TELEGRAM_BOT_TOKEN}/sendMessage?chat_id=${env:TELEGRAM_CHAT_ID}&text=${InfoMessage}&parse_mode=Markdown"
             $CountdownInitialMessage = "⏳ *Bắt đầu đếm ngược...*`n`*Dự kiến kết thúc lúc: ${endTime}*"
             $sentCountdownMessage = Invoke-RestMethod -Uri "https://api.telegram.org/bot${env:TELEGRAM_BOT_TOKEN}/sendMessage?chat_id=${env:TELEGRAM_CHAT_ID}&text=${CountdownInitialMessage}&parse_mode=Markdown"
             $CountdownMessageID = $sentCountdownMessage.result.message_id
